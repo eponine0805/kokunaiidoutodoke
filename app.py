@@ -8,7 +8,7 @@ def create_travel_form_df(template_path, data):
     """テンプレートCSVを読み込み、ユーザー入力データでDataFrameを更新する関数"""
     try:
         # ★★★ 文字化けエラーを解消するために encoding='shift_jis' を追加 ★★★
-        df = pd.read_csv(template_path, header=None, engine='python', encoding='cp932')
+        df = pd.read_csv(template_path, header=None, engine='python', encoding='utf-8-sig')
     except FileNotFoundError:
         st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
         return None
