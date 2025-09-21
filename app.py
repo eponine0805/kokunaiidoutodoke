@@ -150,7 +150,7 @@ if submitted:
             "emergency_contact": emergency_contact, "schedule": st.session_state.schedule
         }
         # ★★★【修正点】ご指摘の通り、正しいファイル名を指定 ★★★
-        template_file = '国内移動届.xlsx'
+        template_file = '国内移動届.xlsx - 申請様式（New）.csv'
         final_df = create_travel_form_df(template_file, user_data)
         if final_df is not None:
             output = io.StringIO()
