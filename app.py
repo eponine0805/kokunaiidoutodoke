@@ -7,7 +7,8 @@ import io
 def create_travel_form_df(template_path, data):
     """テンプレートCSVを読み込み、ユーザー入力データでDataFrameを更新する関数"""
     try:
-        df = pd.read_csv(template_path, header=None)
+        # ParserErrorを回避するため、engine='python'を追加
+        df = pd.read_csv(template_path, header=None, engine='python')
     except FileNotFoundError:
         st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
         return None
@@ -48,19 +49,42 @@ st.title('国内移動届 自動作成ツール ✈️')
 # --- セッションステートの初期化 ---
 if 'schedule' not in st.session_state:
     st.session_state.schedule = []
-# スケジュール入力欄の状態を管理
 if 'dep_county' not in st.session_state: st.session_state.dep_county = "Nairobi"
 if 'dep_town' not in st.session_state: st.session_state.dep_town = "CBD"
 if 'arr_county' not in st.session_state: st.session_state.arr_county = "Kiambu"
 if 'arr_town' not in st.session_state: st.session_state.arr_town = "Thika"
+if 'dep_county_input' not in st.session_state: st.session_state.dep_county_input = st.session_state.dep_county
+if 'dep_town_input' not in st.session_state: st.session_state.dep_town_input = st.session_state.dep_town
+if 'arr_county_input' not in st.session_state: st.session_state.arr_county_input = st.session_state.arr_county
+if 'arr_town_input' not in st.session_state: st.session_state.arr_town_input = st.session_state.arr_town
+
+
+# --- 入れ替え機能をフォームの外に移動 ---
+st.header("6. Schedule for All")
+st.write("↓ 行程を入力し、「＋ 行程を追加」ボタンで行程リストに追加してください。")
+
+col_dep, col_swap, col_arr = st.columns([5, 1, 5])
+with col_dep:
+    st.session_state.dep_county_input = st.text_input("出発カウンティ", value=st.session_state.dep_county, key="dep_county_key")
+    st.session_state.dep_town_input = st.text_input("出発タウン", value=st.session_state.dep_town, key="dep_town_key")
+with col_swap:
+    st.write("") # スペース調整
+    st.write("") # スペース調整
+    if st.button("🔁 入れ替え"):
+        # 値をセッションステート内で入れ替える
+        st.session_state.dep_county, st.session_state.arr_county = st.session_state.arr_county, st.session_state.dep_county
+        st.session_state.dep_town, st.session_state.arr_town = st.session_state.arr_town, st.session_state.dep_town
+        st.rerun()
+with col_arr:
+    st.session_state.arr_county_input = st.text_input("到着カウンティ", value=st.session_state.arr_county, key="arr_county_key")
+    st.session_state.arr_town_input = st.text_input("到着タウン", value=st.session_state.arr_town, key="arr_town_key")
+# --- ここまでがフォームの外 ---
+
 
 # --- メインフォーム ---
 with st.form("travel_form"):
-    st.header("必要事項を入力してください")
-    
-    # ★★★【変更点】様式の選択肢を3つに ★★★
-    # 注：3つ目の選択肢の名称を書き換えてください
-    title_options = ['Application for Official Trip', 'Order of Official Trip', 'Application for private Trip']
+    st.header("基本情報")
+    title_options = ['Application for Official Trip', 'Order of Official Trip', 'Application for Private Trip']
     selected_title = st.selectbox('様式の種類を選択してください', title_options)
 
     st.subheader("1. 目的、2. 目的地、3. 期間")
@@ -75,34 +99,11 @@ with st.form("travel_form"):
     applicant_name = st.text_input("申請者氏名", "Seiichiro Harauma")
     emergency_contact = st.text_input("緊急連絡先の電話番号", "254704387792")
 
-    # --- スケジュール入力 ---
-    st.header("6. Schedule for All")
-    st.write("↓ 下のフォームで行程を1つずつ追加してください。")
-    
-    # --- ★★★【新機能】出発地と到着地の入力＆入れ替え機能 ---
-    col_dep, col_swap, col_arr = st.columns([5, 1, 5])
-    with col_dep:
-        st.text_input("出発カウンティ", key="dep_county")
-        st.text_input("出発タウン", key="dep_town")
-    with col_swap:
-        st.write("") # スペース調整
-        st.write("") # スペース調整
-        swap_button = st.button("🔁 入れ替え")
-    with col_arr:
-        st.text_input("到着カウンティ", key="arr_county")
-        st.text_input("到着タウン", key="arr_town")
-    
-    if swap_button:
-        # 値を入れ替える
-        st.session_state.dep_county, st.session_state.arr_county = st.session_state.arr_county, st.session_state.dep_county
-        st.session_state.dep_town, st.session_state.arr_town = st.session_state.arr_town, st.session_state.dep_town
-        # 画面を再描画して、入力ボックスの表示を更新
-        st.rerun()
-
+    # --- スケジュールの残り（フォーム内）---
+    st.header("スケジュール詳細")
     schedule_cols_1 = st.columns((2, 3))
     date = schedule_cols_1[0].date_input("日付")
     destination_detail = schedule_cols_1[1].text_input("目的地/詳細", "Matatu Stage")
-
     time_cols = st.columns((2, 1, 1, 3, 3))
     transport = time_cols[0].text_input("移動手段", "Taxi, Matatu")
     dep_time = time_cols[1].time_input("出発時間")
@@ -117,13 +118,13 @@ with st.form("travel_form"):
 # --- ボタンが押された後の処理 ---
 if add_clicked:
     st.session_state.schedule.append({
-        "date": date, "dep_county": st.session_state.dep_county, "dep_town": st.session_state.dep_town,
-        "arr_county": st.session_state.arr_county, "arr_town": st.session_state.arr_town,
+        "date": date, "dep_county": st.session_state.dep_county_input, "dep_town": st.session_state.dep_town_input,
+        "arr_county": st.session_state.arr_county_input, "arr_town": st.session_state.arr_town_input,
         "destination_detail": destination_detail, "transport": transport,
         "dep_time": dep_time, "arr_time": arr_time,
         "hotel_name_tel": hotel_name_tel, "hotel_map_link": hotel_map_link
     })
-    st.success("行程を追加しました！")
+    st.rerun()
 
 if st.session_state.schedule:
     st.header("追加された行程リスト")
