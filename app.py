@@ -7,23 +7,30 @@ import io
 def create_travel_form_df(template_path, data):
     """テンプレートCSVを読み込み、ユーザー入力データでDataFrameを更新する関数"""
     try:
-        # ★★★ 文字化けエラーを解消するために encoding='shift_jis' を追加 ★★★
-        df = pd.read_csv(template_path, header=None, engine='python', encoding='utf-8-sig')
+        # ファイルの先頭36行をスキップしてデータ部分のみ読み込む
+        df = pd.read_csv(template_path, header=None, skiprows=36)
     except FileNotFoundError:
         st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
         return None
+    except Exception as e:
+        st.error(f"ファイルの読み込み中に予期せぬエラーが発生しました: {e}")
+        return None
 
-    df.iat[6, 4] = data["selected_title"]
-    df.iat[8, 13] = datetime.now().strftime('%Y-%m-%d')
-    df.iat[24, 2] = data["trip_purpose"]
-    df.iat[25, 2] = data["main_destination"]
-    df.iat[26, 2] = data["start_date_trip"].strftime('%Y-%m-%d')
-    df.iat[26, 4] = data["end_date_trip"].strftime('%Y-%m-%d')
-    df.iat[11, 13] = data["applicant_name"]
-    df.iat[32, 7] = data["emergency_contact"]
+    # ヘッダー部分(先頭36行)を別途読み込む
+    header_df = pd.read_csv(template_path, header=None, nrows=36)
 
-    schedule_start_row = 37
-    num_template_schedule_rows = 6
+    # --- ヘッダー部分にデータを書き込む ---
+    header_df.iat[6, 4] = data["selected_title"]
+    header_df.iat[8, 13] = datetime.now().strftime('%Y-%m-%d')
+    header_df.iat[11, 13] = data["applicant_name"]
+    header_df.iat[24, 2] = data["trip_purpose"]
+    header_df.iat[25, 2] = data["main_destination"]
+    header_df.iat[26, 2] = data["start_date_trip"].strftime('%Y-%m-%d')
+    header_df.iat[26, 4] = data["end_date_trip"].strftime('%Y-%m-%d')
+    header_df.iat[32, 7] = data["emergency_contact"]
+
+
+    # --- 新しいスケジュールを作成 ---
     schedule_data = []
     for item in data["schedule"]:
         row = [
@@ -34,13 +41,18 @@ def create_travel_form_df(template_path, data):
             item["hotel_map_link"], "", "", "", ""
         ]
         schedule_data.append(row)
+
     new_schedule_df = pd.DataFrame(schedule_data)
     if not new_schedule_df.empty:
-        new_schedule_df.columns = df.columns[:new_schedule_df.shape[1]]
-    df_top = df.iloc[:schedule_start_row]
-    df_bottom = df.iloc[schedule_start_row + num_template_schedule_rows:]
-    final_df = pd.concat([df_top, new_schedule_df, df_bottom], ignore_index=True)
+        new_schedule_df.columns = range(header_df.shape[1])
+
+
+    # --- ヘッダー、新しいスケジュール、元のフッター部分を結合 ---
+    footer_df = df.iloc[6:] # 元のデータから空のスケジュール行(6行)を除いた部分
+
+    final_df = pd.concat([header_df, new_schedule_df, footer_df], ignore_index=True)
     return final_df
+
 
 # --- Streamlit UI部分 ---
 st.set_page_config(layout="wide")
@@ -137,6 +149,7 @@ if submitted:
             "start_date_trip": start_date_trip, "end_date_trip": end_date_trip,
             "emergency_contact": emergency_contact, "schedule": st.session_state.schedule
         }
+        # ★★★【修正点】ご指摘の通り、正しいファイル名を指定 ★★★
         template_file = '国内移動届.xlsx'
         final_df = create_travel_form_df(template_file, user_data)
         if final_df is not None:
