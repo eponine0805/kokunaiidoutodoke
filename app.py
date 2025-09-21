@@ -4,18 +4,16 @@ from datetime import datetime
 import io
 import os
 
-# --- データ処理のコアとなる関数 ---
+# --- データ処理のコアとなる関数 (Excel対応版) ---
 def create_travel_form_df(template_path, data):
-    """テンプレートCSVを読み込み、ユーザー入力データでDataFrameを更新する関数"""
+    """テンプレートExcelを読み込み、ユーザー入力データで更新する関数"""
     try:
-        # ファイルの先頭36行をスキップしてデータ部分のみ読み込む
-        df = pd.read_csv(template_path, header=None, skiprows=36)
+        # openpyxl をエンジンとして指定してExcelファイルを読み込む
+        # ヘッダーがないファイルとして読み込む
+        df = pd.read_excel(template_path, header=None, engine='openpyxl', sheet_name=0)
     except FileNotFoundError:
         st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
-        # サーバー上のファイル一覧を表示して、ユーザーが確認できるようにする
         st.warning("サーバー上に存在するファイル:")
-        # 現在のディレクトリのファイル/フォルダをリストする
-        # (Streamlit Cloudでは権限により動作が異なる場合があります)
         try:
             files_in_directory = os.listdir('.')
             for f in files_in_directory:
@@ -24,29 +22,27 @@ def create_travel_form_df(template_path, data):
             st.error(f"ディレクトリのリスト取得中にエラー発生: {list_e}")
         return None
     except Exception as e:
-        st.error(f"ファイルの読み込み中に予期せぬエラーが発生しました: {e}")
+        st.error(f"Excelファイルの読み込み中に予期せぬエラーが発生しました: {e}")
         return None
 
-    # ヘッダー部分(先頭36行)を別途読み込む
-    header_df = pd.read_csv(template_path, header=None, nrows=36)
+    # 元のDataFrameをコピーして、書き込み用のDataFrameを作成
+    write_df = df.copy()
 
-    # --- ヘッダー部分にデータを書き込む ---
-    header_df.iat[6, 4] = data["selected_title"]
-    header_df.iat[8, 13] = datetime.now().strftime('%Y-%m-%d')
-    header_df.iat[11, 13] = data["applicant_name"]
-    header_df.iat[24, 2] = data["trip_purpose"]
-    header_df.iat[25, 2] = data["main_destination"]
-    header_df.iat[26, 2] = data["start_date_trip"].strftime('%Y-%m-%d')
-    header_df.iat[26, 4] = data["end_date_trip"].strftime('%Y-%m-%d')
-    header_df.iat[32, 7] = data["emergency_contact"]
-
+    # --- ヘッダー部分にデータを書き込む (iatからilocに変更) ---
+    # .iatは高速ですが、予期せぬ型変換を避けるためilocで安全に値を設定します
+    write_df.iloc[6, 4] = data["selected_title"]
+    write_df.iloc[8, 13] = datetime.now().strftime('%Y-%m-%d')
+    write_df.iloc[11, 13] = data["applicant_name"]
+    write_df.iloc[24, 2] = data["trip_purpose"]
+    write_df.iloc[25, 2] = data["main_destination"]
+    write_df.iloc[26, 2] = data["start_date_trip"].strftime('%Y-%m-%d')
+    write_df.iloc[26, 4] = data["end_date_trip"].strftime('%Y-%m-%d')
+    write_df.iloc[32, 7] = data["emergency_contact"]
 
     # --- 新しいスケジュールを作成 ---
     schedule_data = []
-    # DataFrameの列数に合わせて空のリストを作成
-    num_columns = header_df.shape[1]
+    num_columns = write_df.shape[1]
     for item in data["schedule"]:
-        # 基本的なデータをリストに追加
         row_data = [
             item["date"].strftime('%Y-%m-%d'), 
             item["dep_county"], 
@@ -56,72 +52,68 @@ def create_travel_form_df(template_path, data):
             item["destination_detail"],
             item["transport"], 
             "", 
-            item["dep_time"].strftime('%H:%M'), # 秒は不要な場合が多い
-            item["arr_time"].strftime('%H:%M'), # 秒は不要な場合が多い
+            item["dep_time"].strftime('%H:%M'),
+            item["arr_time"].strftime('%H:%M'),
             item["hotel_name_tel"], 
             "",
             item["hotel_map_link"]
         ]
-        # 残りの列を空文字列で埋める
+        # 元のExcelの列数に合わせて空のデータを追加
         row = row_data + [""] * (num_columns - len(row_data))
         schedule_data.append(row)
 
     new_schedule_df = pd.DataFrame(schedule_data)
-    
-    # --- ヘッダー、新しいスケジュール、元のフッター部分を結合 ---
-    # 元のデータから空のスケジュール行とヘッダーを除いた部分をフッターとする
-    footer_start_row = 6 # 元のファイルのデータ部分のスケジュールは6行あると仮定
-    footer_df = df.iloc[footer_start_row:] 
 
-    final_df = pd.concat([header_df, new_schedule_df, footer_df], ignore_index=True)
+    # --- データフレームのパーツを結合 ---
+    # 1. ヘッダー部分 (スケジュール開始行まで)
+    header_part = write_df.iloc[:36]
+    # 2. フッター部分 (元のスケジュールの終わりから)
+    footer_part = write_df.iloc[36 + 6:] # 元のテンプレートのスケジュールが6行あると仮定
+
+    # ヘッダー、新しいスケジュール、フッターを結合
+    final_df = pd.concat([header_part, new_schedule_df, footer_part], ignore_index=True)
+
     return final_df
 
 
-# --- Streamlit UI部分 ---
+# --- Streamlit UI部分 (変更なし) ---
 st.set_page_config(layout="wide")
-st.title('国内移動届 自動作成ツール ✈️')
+st.title('国内移動届 自動作成ツール ✈️ (Excel対応版)')
 
-# --- セッションステートの初期化 ---
 if 'schedule' not in st.session_state:
     st.session_state.schedule = []
 if 'dep_county' not in st.session_state: st.session_state.dep_county = "Muranga"
 if 'dep_town' not in st.session_state: st.session_state.dep_town = "Gatanga"
 if 'arr_county' not in st.session_state: st.session_state.arr_county = "Kiambu"
 if 'arr_town' not in st.session_state: st.session_state.arr_town = "Thika"
-# rerunしても入力値が保持されるようにキーを分ける
-if 'dep_county_input' not in st.session_state: st.session_state.dep_county_input = st.session_state.dep_county
-if 'dep_town_input' not in st.session_state: st.session_state.dep_town_input = st.session_state.dep_town
-if 'arr_county_input' not in st.session_state: st.session_state.arr_county_input = st.session_state.arr_county
-if 'arr_town_input' not in st.session_state: st.session_state.arr_town_input = st.session_state.arr_town
 
-
-# --- UIの定義 ---
 st.header("行程の出発地・到着地")
-st.write("↓ デフォルトの出発地・到着地を入力してください。🔁ボタンで入れ替えも可能です。")
-
 col_dep, col_swap, col_arr = st.columns([5, 1, 5])
 with col_dep:
-    dep_county = st.text_input("出発カウンティ", value=st.session_state.dep_county, key="dep_county_default")
-    dep_town = st.text_input("出発タウン", value=st.session_state.dep_town, key="dep_town_default")
+    dep_county = st.text_input("出発カウンティ", st.session_state.dep_county)
+    dep_town = st.text_input("出発タウン", st.session_state.dep_town)
 with col_swap:
     st.write("") 
     st.write("") 
-    if st.button("🔁"):
-        st.session_state.dep_county, st.session_state.arr_county = st.session_state.arr_county, st.session_state.dep_county
-        st.session_state.dep_town, st.session_state.arr_town = st.session_state.arr_town, st.session_state.dep_town
+    if st.button("🔁 入れ替え"):
+        dep_county, arr_county = arr_county, dep_county
+        dep_town, arr_town = arr_town, dep_town
+        st.session_state.dep_county = dep_county
+        st.session_state.dep_town = dep_town
+        st.session_state.arr_county = arr_county
+        st.session_state.arr_town = arr_town
         st.rerun()
 with col_arr:
-    arr_county = st.text_input("到着カウンティ", value=st.session_state.arr_county, key="arr_county_default")
-    arr_town = st.text_input("到着タウン", value=st.session_state.arr_town, key="arr_town_default")
+    arr_county = st.text_input("到着カウンティ", st.session_state.arr_county)
+    arr_town = st.text_input("到着タウン", st.session_state.arr_town)
 
-# ユーザーが入力したデフォルト値を更新
+# フォームの外でセッションステートを更新
 st.session_state.dep_county = dep_county
 st.session_state.dep_town = dep_town
 st.session_state.arr_county = arr_county
 st.session_state.arr_town = arr_town
 
-
-with st.form("travel_form", clear_on_submit=True):
+with st.form("travel_form"):
     st.header("基本情報")
     title_options = ['Application for Official Trip', 'Order of Official Trip', 'Application for Private Trip']
     selected_title = st.selectbox('様式の種類を選択してください', title_options)
@@ -138,18 +130,8 @@ with st.form("travel_form", clear_on_submit=True):
     applicant_name = st.text_input("申請者氏名", "Seiichiro Harauma")
     emergency_contact = st.text_input("緊急連絡先の電話番号", "254704387792")
 
-    st.header("6. Schedule for All - 行程詳細")
-    st.write("↓ 行程を入力し、「＋ 行程を追加」ボタンで行程リストに追加してください。")
-    
-    # 行程入力部分
+    st.header("スケジュール詳細")
     date = st.date_input("日付")
-    
-    # 出発地と到着地の入力フィールドをスケジュールフォーム内に移動
-    dep_county_input = st.text_input("出発カウンティ", value=st.session_state.dep_county)
-    dep_town_input = st.text_input("出発タウン", value=st.session_state.dep_town)
-    arr_county_input = st.text_input("到着カウンティ", value=st.session_state.arr_county)
-    arr_town_input = st.text_input("到着タウン", value=st.session_state.arr_town)
-    
     destination_detail = st.text_input("目的地/詳細", "Matatu Stage")
     transport = st.text_input("移動手段", "Taxi, Matatu")
     time_cols = st.columns(2)
@@ -163,29 +145,20 @@ with st.form("travel_form", clear_on_submit=True):
 
 if add_clicked:
     st.session_state.schedule.append({
-        "date": date, 
-        "dep_county": dep_county_input, 
-        "dep_town": dep_town_input,
-        "arr_county": arr_county_input, 
-        "arr_town": arr_town_input,
-        "destination_detail": destination_detail, 
-        "transport": transport,
-        "dep_time": dep_time, 
-        "arr_time": arr_time,
-        "hotel_name_tel": hotel_name_tel, 
-        "hotel_map_link": hotel_map_link
+        "date": date, "dep_county": st.session_state.dep_county, "dep_town": st.session_state.dep_town,
+        "arr_county": st.session_state.arr_county, "arr_town": st.session_state.arr_town,
+        "destination_detail": destination_detail, "transport": transport,
+        "dep_time": dep_time, "arr_time": arr_time,
+        "hotel_name_tel": hotel_name_tel, "hotel_map_link": hotel_map_link
     })
-    # フォームがクリアされてしまうので、デフォルト値をセッションステートに保持
-    st.session_state.dep_county = arr_county_input
-    st.session_state.dep_town = arr_town_input
+    # 次の入力のために、到着地を出発地として設定
+    st.session_state.dep_county = st.session_state.arr_county
+    st.session_state.dep_town = st.session_state.arr_town
     st.rerun()
 
 if st.session_state.schedule:
     st.header("追加された行程リスト")
-    # 不要な列を削除し、見やすいように整形
-    df_display = pd.DataFrame(st.session_state.schedule)
-    display_cols = ["date", "dep_county", "dep_town", "arr_county", "arr_town", "transport", "dep_time", "arr_time", "hotel_name_tel"]
-    st.dataframe(df_display[display_cols].astype(str), use_container_width=True)
+    st.dataframe(pd.DataFrame(st.session_state.schedule).astype(str), use_container_width=True)
 
 if submitted:
     if not st.session_state.schedule:
@@ -197,22 +170,29 @@ if submitted:
             "start_date_trip": start_date_trip, "end_date_trip": end_date_trip,
             "emergency_contact": emergency_contact, "schedule": st.session_state.schedule
         }
-        # ★★★【修正点】アップロードされた正しいファイル名を参照 ★★★
-        template_file = '国内移動届.xlsx - 申請様式（New）.csv'
+        
+        # ★★★【修正点】元のExcelファイル名を参照 ★★★
+        template_file = '国内移動届.xlsx' 
         final_df = create_travel_form_df(template_file, user_data)
         
         if final_df is not None:
-            output = io.StringIO()
-            final_df.to_csv(output, index=False, header=False) # encodingはStringIOでは不要
-            csv_data = output.getvalue().encode('utf-8-sig') # ダウンロード時にBOM付きUTF-8にエンコード
+            # ★★★【修正点】Excelファイルとして出力する処理 ★★★
+            output = io.BytesIO()
+            # pandas DataFrame を Excel 形式で BytesIO オブジェクトに書き込む
+            # indexとheaderは元のExcelに合わせて出力しない
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                final_df.to_excel(writer, index=False, header=False, sheet_name='申請様式（New）')
+            
+            excel_data = output.getvalue()
             
             st.balloons()
             st.success("移動届が正常に生成されました！下のボタンからダウンロードしてください。")
             st.download_button(
-                label="📥 完成したCSVファイルをダウンロード",
-                data=csv_data,
-                file_name=f"国内移動届_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime='text/csv',
+                label="📥 完成したExcelファイルをダウンロード",
+                data=excel_data,
+                file_name=f"国内移動届_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                # ExcelファイルのMIMEタイプを指定
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             )
             # 生成後にリストをクリア
             st.session_state.schedule = []
