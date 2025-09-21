@@ -60,7 +60,7 @@ with st.form("travel_form"):
     
     # ★★★【変更点】様式の選択肢を3つに ★★★
     # 注：3つ目の選択肢の名称を書き換えてください
-    title_options = ['Application for Official Trip', 'Order of Official Trip', '【３つ目の選択肢をここに入力】']
+    title_options = ['Application for Official Trip', 'Order of Official Trip', 'Application for private Trip']
     selected_title = st.selectbox('様式の種類を選択してください', title_options)
 
     st.subheader("1. 目的、2. 目的地、3. 期間")
