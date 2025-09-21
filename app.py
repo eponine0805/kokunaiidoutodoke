@@ -7,8 +7,8 @@ import io
 def create_travel_form_df(template_path, data):
     """テンプレートCSVを読み込み、ユーザー入力データでDataFrameを更新する関数"""
     try:
-        # ParserErrorを回避するため、engine='python'を追加
-        df = pd.read_csv(template_path, header=None, engine='python')
+        # ★★★ 文字化けエラーを解消するために encoding='shift_jis' を追加 ★★★
+        df = pd.read_csv(template_path, header=None, engine='python', encoding='shift_jis')
     except FileNotFoundError:
         st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
         return None
@@ -71,7 +71,6 @@ with col_swap:
     st.write("") # スペース調整
     st.write("") # スペース調整
     if st.button("🔁 入れ替え"):
-        # 値をセッションステート内で入れ替える
         st.session_state.dep_county, st.session_state.arr_county = st.session_state.arr_county, st.session_state.dep_county
         st.session_state.dep_town, st.session_state.arr_town = st.session_state.arr_town, st.session_state.dep_town
         st.rerun()
@@ -99,7 +98,6 @@ with st.form("travel_form"):
     applicant_name = st.text_input("申請者氏名", "Seiichiro Harauma")
     emergency_contact = st.text_input("緊急連絡先の電話番号", "254704387792")
 
-    # --- スケジュールの残り（フォーム内）---
     st.header("スケジュール詳細")
     schedule_cols_1 = st.columns((2, 3))
     date = schedule_cols_1[0].date_input("日付")
@@ -111,7 +109,6 @@ with st.form("travel_form"):
     hotel_name_tel = time_cols[3].text_input("ホテル名と電話番号", "The Kiama River hotel +254725200665")
     hotel_map_link = time_cols[4].text_input("ホテルのGoogle Mapリンク (任意)")
 
-    # --- フォームのボタン ---
     add_clicked = st.form_submit_button("＋ 行程を追加")
     submitted = st.form_submit_button("✅ 移動届を生成する")
 
