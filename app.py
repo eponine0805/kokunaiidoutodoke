@@ -2,25 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
-import os # ファイル一覧を取得するために追加
-
-# --- Streamlit UI部分 ---
-st.set_page_config(layout="wide")
-st.title('国内移動届 自動作成ツール ✈️')
-
-# --- ★★★【デバッグ機能】サーバー上のファイル一覧を表示 ★★★
-st.warning("デバッグ情報：サーバー上のファイル一覧")
-try:
-    # カレントディレクトリにあるファイルとフォルダのリストを取得
-    files_in_directory = os.listdir('.')
-    # リストを箇条書きで表示
-    for f in files_in_directory:
-        st.write(f"- `{f}`")
-except Exception as e:
-    st.error(f"ファイル一覧の取得中にエラーが発生しました: {e}")
-st.markdown("---") # 区切り線
-# --- デバッグここまで ---
-
+import os
 
 # --- データ処理のコアとなる関数 ---
 def create_travel_form_df(template_path, data):
@@ -29,8 +11,12 @@ def create_travel_form_df(template_path, data):
         # ファイルの先頭36行をスキップしてデータ部分のみ読み込む
         df = pd.read_csv(template_path, header=None, skiprows=36)
     except FileNotFoundError:
-        # ★★★ エラーメッセージを分かりやすく変更 ★★★
-        st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。上記デバッグ情報のファイル一覧に、このファイル名が存在するか確認してください。")
+        st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
+        # サーバー上のファイル一覧を表示して、ユーザーが確認できるようにする
+        st.warning("サーバー上に存在するファイル:")
+        files_in_directory = os.listdir('.')
+        for f in files_in_directory:
+            st.code(f)
         return None
     except Exception as e:
         st.error(f"ファイルの読み込み中に予期せぬエラーが発生しました: {e}")
@@ -73,6 +59,11 @@ def create_travel_form_df(template_path, data):
     final_df = pd.concat([header_df, new_schedule_df, footer_df], ignore_index=True)
     return final_df
 
+
+# --- Streamlit UI部分 ---
+st.set_page_config(layout="wide")
+st.title('国内移動届 自動作成ツール ✈️')
+
 # --- セッションステートの初期化 ---
 if 'schedule' not in st.session_state:
     st.session_state.schedule = []
@@ -86,7 +77,7 @@ if 'arr_county_input' not in st.session_state: st.session_state.arr_county_input
 if 'arr_town_input' not in st.session_state: st.session_state.arr_town_input = st.session_state.arr_town
 
 
-# --- 入れ替え機能をフォームの外に移動 ---
+# --- UIの定義 ---
 st.header("6. Schedule for All")
 st.write("↓ 行程を入力し、「＋ 行程を追加」ボタンで行程リストに追加してください。")
 
@@ -95,8 +86,8 @@ with col_dep:
     st.session_state.dep_county_input = st.text_input("出発カウンティ", value=st.session_state.dep_county, key="dep_county_key")
     st.session_state.dep_town_input = st.text_input("出発タウン", value=st.session_state.dep_town, key="dep_town_key")
 with col_swap:
-    st.write("") # スペース調整
-    st.write("") # スペース調整
+    st.write("") 
+    st.write("") 
     if st.button("🔁 入れ替え"):
         st.session_state.dep_county, st.session_state.arr_county = st.session_state.arr_county, st.session_state.dep_county
         st.session_state.dep_town, st.session_state.arr_town = st.session_state.arr_town, st.session_state.dep_town
@@ -104,10 +95,7 @@ with col_swap:
 with col_arr:
     st.session_state.arr_county_input = st.text_input("到着カウンティ", value=st.session_state.arr_county, key="arr_county_key")
     st.session_state.arr_town_input = st.text_input("到着タウン", value=st.session_state.arr_town, key="arr_town_key")
-# --- ここまでがフォームの外 ---
 
-
-# --- メインフォーム ---
 with st.form("travel_form"):
     st.header("基本情報")
     title_options = ['Application for Official Trip', 'Order of Official Trip', 'Application for Private Trip']
@@ -139,7 +127,6 @@ with st.form("travel_form"):
     add_clicked = st.form_submit_button("＋ 行程を追加")
     submitted = st.form_submit_button("✅ 移動届を生成する")
 
-# --- ボタンが押された後の処理 ---
 if add_clicked:
     st.session_state.schedule.append({
         "date": date, "dep_county": st.session_state.dep_county_input, "dep_town": st.session_state.dep_town_input,
@@ -164,7 +151,7 @@ if submitted:
             "start_date_trip": start_date_trip, "end_date_trip": end_date_trip,
             "emergency_contact": emergency_contact, "schedule": st.session_state.schedule
         }
-        # 正しいファイル名を指定
+        # ★★★【修正点】今回アップロードされた正しいファイル名を参照 ★★★
         template_file = '国内移動届.xlsx - 申請様式（New）.csv'
         final_df = create_travel_form_df(template_file, user_data)
         if final_df is not None:
