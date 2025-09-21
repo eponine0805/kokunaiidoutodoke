@@ -7,8 +7,7 @@ import io
 def create_travel_form_df(template_path, data):
     """テンプレートCSVを読み込み、ユーザー入力データでDataFrameを更新する関数"""
     try:
-        # ★★★ 文字化けエラーを解消するために encoding='shift_jis' を追加 ★★★
-        df = pd.read_csv(template_path, header=None, engine='python', encoding='shift_jis')
+        df = pd.read_csv(template_path, header=None, engine='python')
     except FileNotFoundError:
         st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
         return None
@@ -49,8 +48,8 @@ st.title('国内移動届 自動作成ツール ✈️')
 # --- セッションステートの初期化 ---
 if 'schedule' not in st.session_state:
     st.session_state.schedule = []
-if 'dep_county' not in st.session_state: st.session_state.dep_county = "Nairobi"
-if 'dep_town' not in st.session_state: st.session_state.dep_town = "CBD"
+if 'dep_county' not in st.session_state: st.session_state.dep_county = "Muranga"
+if 'dep_town' not in st.session_state: st.session_state.dep_town = "Gatanga"
 if 'arr_county' not in st.session_state: st.session_state.arr_county = "Kiambu"
 if 'arr_town' not in st.session_state: st.session_state.arr_town = "Thika"
 if 'dep_county_input' not in st.session_state: st.session_state.dep_county_input = st.session_state.dep_county
