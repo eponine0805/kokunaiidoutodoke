@@ -140,7 +140,7 @@ if submitted:
             "start_date_trip": start_date_trip, "end_date_trip": end_date_trip,
             "emergency_contact": emergency_contact, "schedule": st.session_state.schedule
         }
-        template_file = '国内移動届.xlsx - 申請様式（New）.csv'
+        template_file = '国内移動届.xlsx'
         final_df = create_travel_form_df(template_file, user_data)
         if final_df is not None:
             output = io.StringIO()
