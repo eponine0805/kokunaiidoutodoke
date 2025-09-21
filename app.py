@@ -2,6 +2,25 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
+import os # ファイル一覧を取得するために追加
+
+# --- Streamlit UI部分 ---
+st.set_page_config(layout="wide")
+st.title('国内移動届 自動作成ツール ✈️')
+
+# --- ★★★【デバッグ機能】サーバー上のファイル一覧を表示 ★★★
+st.warning("デバッグ情報：サーバー上のファイル一覧")
+try:
+    # カレントディレクトリにあるファイルとフォルダのリストを取得
+    files_in_directory = os.listdir('.')
+    # リストを箇条書きで表示
+    for f in files_in_directory:
+        st.write(f"- `{f}`")
+except Exception as e:
+    st.error(f"ファイル一覧の取得中にエラーが発生しました: {e}")
+st.markdown("---") # 区切り線
+# --- デバッグここまで ---
+
 
 # --- データ処理のコアとなる関数 ---
 def create_travel_form_df(template_path, data):
@@ -10,7 +29,8 @@ def create_travel_form_df(template_path, data):
         # ファイルの先頭36行をスキップしてデータ部分のみ読み込む
         df = pd.read_csv(template_path, header=None, skiprows=36)
     except FileNotFoundError:
-        st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。")
+        # ★★★ エラーメッセージを分かりやすく変更 ★★★
+        st.error(f"エラー: テンプレートファイル '{template_path}' が見つかりません。上記デバッグ情報のファイル一覧に、このファイル名が存在するか確認してください。")
         return None
     except Exception as e:
         st.error(f"ファイルの読み込み中に予期せぬエラーが発生しました: {e}")
@@ -52,11 +72,6 @@ def create_travel_form_df(template_path, data):
 
     final_df = pd.concat([header_df, new_schedule_df, footer_df], ignore_index=True)
     return final_df
-
-
-# --- Streamlit UI部分 ---
-st.set_page_config(layout="wide")
-st.title('国内移動届 自動作成ツール ✈️')
 
 # --- セッションステートの初期化 ---
 if 'schedule' not in st.session_state:
@@ -149,7 +164,7 @@ if submitted:
             "start_date_trip": start_date_trip, "end_date_trip": end_date_trip,
             "emergency_contact": emergency_contact, "schedule": st.session_state.schedule
         }
-        # ★★★【修正点】ご指摘の通り、正しいファイル名を指定 ★★★
+        # 正しいファイル名を指定
         template_file = '国内移動届.xlsx - 申請様式（New）.csv'
         final_df = create_travel_form_df(template_file, user_data)
         if final_df is not None:
